@@ -1,0 +1,74 @@
+#ifndef OSG_IMAGETEXTUREBINDING
+#define OSG_IMAGETEXTUREBINDING 1
+
+#include <osg/StateAttribute>
+
+namespace osg
+{
+
+class Texture;
+
+class OSG_EXPORT ImageTextureBinding : public osg::StateAttribute
+{
+public:
+    enum Access {
+        READ_ONLY = GL_READ_ONLY,
+        WRITE_ONLY = GL_WRITE_ONLY,
+        READ_WRITE = GL_READ_WRITE
+    };
+
+protected:
+    ImageTextureBinding();
+
+    ~ImageTextureBinding();
+
+public:
+    ImageTextureBinding(unsigned int index, osg::Texture *texture,
+                        Access access = READ_WRITE,
+                        int level = 0, bool layered = true, int layer = 0);
+    ImageTextureBinding(const ImageTextureBinding &itb, 
+                        const osg::CopyOp &op = osg::CopyOp::SHALLOW_COPY);
+
+    META_StateAttribute(osg, ImageTextureBinding, IMAGETEXTUREBINDING);
+
+public:
+    // The member value is part of the key to this state attribute in
+    // the State class. Using the index target, we can seperately
+    // track the bindings for many different index targets.
+    virtual unsigned getMember() const
+    {
+        return _index; 
+    }
+
+    virtual int compare(const osg::StateAttribute& itb) const;
+
+    virtual void apply(osg::State &state) const;
+
+    void setTexture(osg::Texture *texture);
+
+    osg::Texture *getTexture()
+    {
+        return _texture.get();
+    }
+
+    const osg::Texture *getTexture() const
+    {
+        return _texture.get();
+    }
+
+    void setBindingFormat(GLenum format)
+    {
+        _format = format;
+    }
+protected:
+    unsigned int _index;
+    osg::ref_ptr<osg::Texture> _texture;
+    GLenum _format;
+    int _level;
+    GLboolean _layered;
+    int _layer;
+    Access _access;
+};
+
+}
+#endif

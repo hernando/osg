@@ -83,6 +83,7 @@ SET(TARGET_H
     ${HEADER_PATH}/Group
     ${HEADER_PATH}/Hint
     ${HEADER_PATH}/Image
+    ${HEADER_PATH}/ImageTextureBinding
     ${HEADER_PATH}/ImageSequence
     ${HEADER_PATH}/ImageStream
     ${HEADER_PATH}/ImageUtils
@@ -275,6 +276,7 @@ SET(TARGET_SRC
     Group.cpp
     Hint.cpp
     Image.cpp
+    ImageTextureBinding.cpp
     ImageSequence.cpp
     ImageStream.cpp
     ImageUtils.cpp

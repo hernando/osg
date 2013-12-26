@@ -57,7 +57,7 @@ int ImageTextureBinding::compare(const osg::StateAttribute& itb) const
 void ImageTextureBinding::apply(osg::State &state) const
 {
     static void (*glBindImageTexture)(GLuint, GLuint, GLint, GLboolean,
-                                         GLint, GLenum, GLint) = 0;
+                                      GLint, GLenum, GLint) = 0;
     if (glBindImageTexture == 0)
     {
         osg::setGLExtensionFuncPtr(glBindImageTexture, "glBindImageTexture",
@@ -72,13 +72,21 @@ void ImageTextureBinding::apply(osg::State &state) const
     if (_texture.get() != 0)
     {
         unsigned int contextID = state.getContextID();
-        _texture->apply(state);
         osg::Texture::TextureObject *to =
             _texture->getTextureObject(contextID);
-        assert(to != 0);
+        if (!to)
+        {
+            GLint boundTexture;
+            glGetIntegerv(_texture->getTextureTarget(), &boundTexture);
+            _texture->apply(state);
+            /* Restoring the previously bound texture */
+            glBindTexture(_texture->getTextureTarget(), boundTexture);
+            to = _texture->getTextureObject(contextID);
+        }
         glBindImageTexture(_index, to->id(), _level, _layered, _layer,
                            (GLenum) _access, _format);
-        if (state.getGlobalDefaultAttribute(getType(), _index)) {
+        if (state.getGlobalDefaultAttribute(getType(), _index))
+        {
             ImageTextureBinding *default_itb = new ImageTextureBinding();
             default_itb->_index = _index;
             state.setGlobalDefaultAttribute(default_itb);

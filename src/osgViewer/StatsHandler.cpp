@@ -28,6 +28,136 @@
 namespace osgViewer
 {
 
+#ifdef OSG_GL3_AVAILABLE
+osg::StateSet *getOrCreateTextStateSet()
+{
+    static osg::ref_ptr<osg::StateSet> stateset;
+
+    if (stateset.get() == 0) {
+        stateset = new osg::StateSet();
+        osg::Program *program = new osg::Program;
+        osg::Shader *vert = new osg::Shader(osg::Shader::VERTEX);
+        vert->setShaderSource
+            ("#version 410\n"
+             "uniform vec2 viewport;"
+             "in vec4 osg_Vertex;"
+             "in vec4 osg_Color;"
+             "in vec4 osg_MultiTexCoord0;"
+             "out vec4 color;"
+             "sample out vec4 texCoord;"
+             "void main()"
+             "{"
+             "   gl_Position.x = osg_Vertex.x * 2 / viewport.x - 1.0;"
+             "   gl_Position.y = osg_Vertex.y * 2 / viewport.y - 1.0;"
+             "   gl_Position.zw = vec2(0, 1);"
+             "   color = osg_Color;"
+             "   texCoord = osg_MultiTexCoord0;"
+             "}");
+        program->addShader(vert);
+        osg::Shader *frag = new osg::Shader(osg::Shader::FRAGMENT);
+        frag->setShaderSource
+            ("#version 410\n"
+             "in vec4 color;"
+             "sample in vec4 texCoord;"
+             "out vec4 fragColor;"
+             "uniform sampler2D texture;"
+             "void main()"
+             "{"
+             "   fragColor = color;"
+             "   fragColor.a = texture2D(texture, texCoord.rg).a;"
+             "}");
+        program->addShader(frag);
+        stateset->setAttributeAndModes(program);
+        osg::Uniform *viewport =
+            new osg::Uniform(osg::Uniform::FLOAT_VEC2, "viewport");
+        stateset->addUniform(viewport);
+    }
+    return stateset.get();
+}
+
+osg::StateSet *getOrCreateBackgroundStateSet()
+{
+    static osg::ref_ptr<osg::StateSet> stateset;
+
+    if (stateset.get() == 0) {
+        stateset = new osg::StateSet();
+        osg::Program *program = new osg::Program;
+        osg::Shader *vert = new osg::Shader(osg::Shader::VERTEX);
+        vert->setShaderSource
+            ("#version 410\n"
+             "uniform vec2 viewport;"
+             "in vec4 osg_Vertex;"
+             "in vec4 osg_Color;"
+             "out vec4 color;"
+             "void main()"
+             "{"
+             "   gl_Position.x = osg_Vertex.x * 2 / viewport.x - 1.0;"
+             "   gl_Position.y = osg_Vertex.y * 2 / viewport.y - 1.0;"
+             "   gl_Position.zw = vec2(0, 1);"
+             "   color = osg_Color;"
+             "}");
+        program->addShader(vert);
+        osg::Shader *frag = new osg::Shader(osg::Shader::FRAGMENT);
+        frag->setShaderSource
+            ("#version 410\n"
+             "in vec4 color;"
+             "out vec4 fragColor;"
+             "void main()"
+             "{"
+             "   fragColor = color;"
+             "}");
+        program->addShader(frag);
+        stateset->setAttributeAndModes(program);
+        osg::Uniform *viewport =
+            new osg::Uniform(osg::Uniform::FLOAT_VEC2, "viewport");
+        stateset->addUniform(viewport);
+    }
+    return stateset.get();
+}
+
+osg::StateSet *getOrCreateGraphsStateSet()
+{
+    static osg::ref_ptr<osg::StateSet> stateset;
+
+    if (stateset.get() == 0) {
+        stateset = new osg::StateSet();
+        osg::Program *program = new osg::Program;
+        osg::Shader *vert = new osg::Shader(osg::Shader::VERTEX);
+        vert->setShaderSource
+            ("#version 410\n"
+             "uniform vec2 viewport;"
+             "in vec4 osg_Vertex;"
+             "in vec4 osg_Color;"
+             "uniform mat4x4 osg_ModelViewMatrix;"
+             "out vec4 color;"
+             "void main()"
+             "{"
+             "   vec4 v = osg_ModelViewMatrix * osg_Vertex;\n"
+             "   gl_Position.x = v.x * 2 / viewport.x - 1.0;"
+             "   gl_Position.y = v.y * 2 / viewport.y - 1.0;"
+             "   gl_Position.zw = vec2(0, 1);"
+             "   color = osg_Color;"
+             "}");
+        program->addShader(vert);
+        osg::Shader *frag = new osg::Shader(osg::Shader::FRAGMENT);
+        frag->setShaderSource
+            ("#version 410\n"
+             "in vec4 color;"
+             "out vec4 fragColor;"
+             "void main()"
+             "{"
+             "   fragColor = color;"
+             "}");
+        program->addShader(frag);
+        stateset->setAttributeAndModes(program);
+        osg::Uniform *viewport =
+            new osg::Uniform(osg::Uniform::FLOAT_VEC2, "viewport");
+        stateset->addUniform(viewport);
+    }
+    return stateset.get();
+}
+#endif
+
 
 StatsHandler::StatsHandler():
     _keyEventTogglesOnScreenStats('s'),
@@ -682,7 +812,12 @@ struct BlockDrawCallback : public virtual osg::Drawable::DrawCallback
 
 osg::Geometry* StatsHandler::createBackgroundRectangle(const osg::Vec3& pos, const float width, const float height, osg::Vec4& color)
 {
+#ifdef OSG_GL3_AVAILABLE
+    osg::StateSet *ss = getOrCreateBackgroundStateSet();
+    ss->getUniform("viewport")->set(osg::Vec2(_statsWidth, _statsHeight));
+#else
     osg::StateSet *ss = new osg::StateSet;
+#endif
 
     osg::Geometry* geometry = new osg::Geometry;
 
@@ -720,7 +855,9 @@ struct StatsGraph : public osg::MatrixTransform
           _statsGraphGeode(new osg::Geode)
     {
         _pos -= osg::Vec3(0, height, 0.1);
+#ifndef OSG_GL3_AVAILABLE
         setMatrix(osg::Matrix::translate(_pos));
+#endif
         addChild(_statsGraphGeode.get());
     }
 
@@ -1133,10 +1270,17 @@ void StatsHandler::setUpScene(osgViewer::ViewerBase* viewer)
 
     osg::Vec4 colorDP( 1.0f,1.0f,0.5f,1.0f);
 
-
+#ifdef OSG_GL3_AVAILABLE
+    osg::StateSet *textStateSet = getOrCreateTextStateSet();
+    textStateSet->getUniform("viewport")->set(osg::Vec2(_statsWidth,
+                                                        _statsHeight));
+#endif
     // frame rate stats
     {
         osg::Geode* geode = new osg::Geode();
+#ifdef OSG_GL3_AVAILABLE
+        geode->setStateSet(textStateSet);
+#endif
         _frameRateChildNum = _switch->getNumChildren();
         _switch->addChild(geode, false);
 
@@ -1260,6 +1404,12 @@ void StatsHandler::setUpScene(osgViewer::ViewerBase* viewer)
             osg::Geode* geode = new osg::Geode;
             group->addChild(geode);
 
+#ifdef OSG_GL3_AVAILABLE
+            osg::StateSet *stateset = getOrCreateGraphsStateSet();
+            geode->setStateSet(stateset);
+            stateset->getUniform("viewport")->set(osg::Vec2(_statsWidth, _statsHeight));
+#endif
+
             osg::Vec4 colourTicks(1.0f,1.0f,1.0f, 0.5f);
 
             pos.x() = _startBlocks;
@@ -1285,6 +1435,12 @@ void StatsHandler::setUpScene(osgViewer::ViewerBase* viewer)
             // Create a stats graph and add any stats we want to track with it.
             StatsGraph* statsGraph = new StatsGraph(pos, width, height);
             group->addChild(statsGraph);
+
+#ifdef OSG_GL3_AVAILABLE
+            osg::StateSet *stateset = getOrCreateGraphsStateSet();
+            statsGraph->setStateSet(stateset);
+            stateset->getUniform("viewport")->set(osg::Vec2(_statsWidth, _statsHeight));
+#endif
 
             statsGraph->addStatGraph(viewer->getViewerStats(), viewer->getViewerStats(), colorFR, 100, "Frame rate");
             statsGraph->addStatGraph(viewer->getViewerStats(), viewer->getViewerStats(), colorEvent, 0.016, "Event traversal time taken");
@@ -1508,6 +1664,9 @@ void StatsHandler::setUpScene(osgViewer::ViewerBase* viewer)
         viewStr << "Polygons" << std::endl;
         viewStr.setf(std::ios::right,std::ios::adjustfield);
         camStaticText->setText(viewStr.str());
+#ifdef OSG_GL3_AVAILABLE
+        camStaticText->setStateSet(textStateSet);
+#endif
 
         // Move camera block to the right
         pos.x() += 10 * _characterSize + 2 * backgroundMargin + backgroundSpacing;
@@ -1531,6 +1690,9 @@ void StatsHandler::setUpScene(osgViewer::ViewerBase* viewer)
             camStatsText->setPosition(pos);
             camStatsText->setText("");
             camStatsText->setDrawCallback(new CameraSceneStatsTextDrawCallback(*citr, cameraCounter));
+#ifdef OSG_GL3_AVAILABLE
+            camStatsText->setStateSet(textStateSet);
+#endif
 
             // Move camera block to the right
             pos.x() +=  5 * _characterSize + 2 * backgroundMargin + backgroundSpacing;
@@ -1579,6 +1741,9 @@ void StatsHandler::setUpScene(osgViewer::ViewerBase* viewer)
         viewStr << "Primitives" << std::endl;
         viewStr.setf(std::ios::right, std::ios::adjustfield);
         camStaticText->setText(viewStr.str());
+#ifdef OSG_GL3_AVAILABLE
+        camStaticText->setStateSet(textStateSet);
+#endif
 
         // Move viewer block to the right
         pos.x() += 6 * _characterSize + 2 * backgroundMargin + backgroundSpacing;
@@ -1604,6 +1769,9 @@ void StatsHandler::setUpScene(osgViewer::ViewerBase* viewer)
             text->setCharacterSize(_characterSize);
             text->setPosition(pos);
             text->setDrawCallback(new ViewSceneStatsTextDrawCallback(*it, viewCounter));
+#ifdef OSG_GL3_AVAILABLE
+            text->setStateSet(textStateSet);
+#endif
 
             pos.x() += 10 * _characterSize + 2 * backgroundMargin + backgroundSpacing;
             viewCounter++;
@@ -1625,6 +1793,10 @@ void StatsHandler::createTimeStatsLine(const std::string& lineLabel,
     label->setCharacterSize(_characterSize);
     label->setPosition(pos);
     label->setText(lineLabel + ": ");
+#ifdef OSG_GL3_AVAILABLE
+    osg::StateSet *textStateSet = getOrCreateTextStateSet();
+    label->setStateSet(textStateSet);
+#endif
 
     pos.x() = label->getBound().xMax();
 
@@ -1653,6 +1825,9 @@ void StatsHandler::createTimeStatsLine(const std::string& lineLabel,
     {
         pos.x() = _startBlocks;
         osg::Geometry* geometry = createGeometry(pos, _characterSize *0.8, barColor, _numBlocks);
+#ifdef OSG_GL3_AVAILABLE
+        geometry->setStateSet(getOrCreateGraphsStateSet());
+#endif
         geometry->setDrawCallback(new BlockDrawCallback(this, _startBlocks, viewerStats, stats, beginTimeName, endTimeName, -1, _numBlocks));
         _statsGeode->addDrawable(geometry);
     }

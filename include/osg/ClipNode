@@ -106,6 +106,11 @@ class OSG_EXPORT ClipNode : public Group
         ClipPlaneList                   _planes;
 
         ReferenceFrame                  _referenceFrame;
+#if !(defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE))
+        ref_ptr<Uniform>                 _clipPlanesUniform;
+        ref_ptr<Uniform>                 _maxClipPlanesUniform;
+        void                             _setUniform();
+#endif
 };
 
 }

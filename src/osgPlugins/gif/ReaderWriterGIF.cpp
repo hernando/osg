@@ -561,7 +561,8 @@ GifImageStream** obj)
     *width_ret = giffile->SWidth;
     *height_ret = giffile->SHeight;
     *numComponents_ret = 4;
-    DGifCloseFile(giffile);
+    int err = 0;
+    DGifCloseFile(giffile, &err);
     return buffer;
 }
 

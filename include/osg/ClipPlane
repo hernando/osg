@@ -78,11 +78,19 @@ class OSG_EXPORT ClipPlane : public StateAttribute
 
         virtual unsigned int getMember() const { return _clipPlaneNum; }
 
+#if defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE)
         virtual bool getModeUsage(StateAttribute::ModeUsage& usage) const
         {
             usage.usesMode((GLMode)(GL_CLIP_PLANE0+_clipPlaneNum));
             return true;
         }
+#else
+        virtual bool getModeUsage(StateAttribute::ModeUsage& usage) const
+        {
+            usage.usesMode((GLMode)(GL_CLIP_DISTANCE0+_clipPlaneNum));
+            return true;
+        }
+#endif
 
 
         /** Set the clip plane with the given Plane. */

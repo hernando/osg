@@ -21,6 +21,9 @@ ClipNode::ClipNode():
     _referenceFrame(RELATIVE_RF)
 {
     setStateSet(new StateSet);
+#if !(defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE))
+    _setUniform();
+#endif
 }
 
 ClipNode::ClipNode(const ClipNode& cn, const CopyOp& copyop):
@@ -29,6 +32,9 @@ ClipNode::ClipNode(const ClipNode& cn, const CopyOp& copyop):
     _referenceFrame(cn._referenceFrame)
 {
     setStateSet(new StateSet);
+#if !(defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE))
+    _setUniform();
+#endif
     for(ClipPlaneList::const_iterator itr=cn._planes.begin();
         itr!=cn._planes.end();
         ++itr)
@@ -44,7 +50,6 @@ ClipNode::ClipNode(const ClipNode& cn, const CopyOp& copyop):
 ClipNode::~ClipNode()
 {
 }
-
 
 void ClipNode::setReferenceFrame(ReferenceFrame rf)
 {
@@ -154,3 +159,58 @@ BoundingSphere ClipNode::computeBound() const
 {
     return Group::computeBound();
 }
+
+#if !(defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE))
+#define MAX_CLIP_PLANES 8
+
+namespace
+{
+    class updateClipPlanes: public osg::Uniform::Callback
+    {
+    private:
+    ClipNode * _clipNode;
+    public:
+    updateClipPlanes( ClipNode * clipNode) : _clipNode( clipNode ) {}
+
+    virtual void operator()
+        ( osg::Uniform* uniform, osg::NodeVisitor* nv )
+        {
+            OSG_NOTICE<<"UPDATING UNIFORM"<<std::endl;
+            if(_clipNode->getNumClipPlanes() > MAX_CLIP_PLANES)
+                OSG_WARN<<"Warning ClipNode: number clip planes greater than maximum "<<MAX_CLIP_PLANES<<std::endl;
+
+            for(osg::ClipNode::ClipPlaneList::const_iterator itr=_clipNode->getClipPlaneList().begin();
+                itr!=_clipNode->getClipPlaneList().end();
+                ++itr)
+            {
+                if(itr->get()->getClipPlaneNum() > MAX_CLIP_PLANES)
+                {
+                    OSG_WARN<<"Warning ClipNode: index clip plane greater than maximum "<<MAX_CLIP_PLANES<<std::endl;
+                }
+                else
+                {
+                    uniform->setElement(itr->get()->getClipPlaneNum(), Vec4(itr->get()->getClipPlane()));
+                    OSG_NOTICE<<itr->get()->getClipPlaneNum()<< " ";
+                    OSG_NOTICE<<itr->get()->getClipPlane()[0]<< " ";
+                    OSG_NOTICE<<itr->get()->getClipPlane()[1]<< " ";
+                    OSG_NOTICE<<itr->get()->getClipPlane()[2]<< " ";
+                    OSG_NOTICE<<itr->get()->getClipPlane()[3]<<std::endl;
+                }
+            }
+        }
+    };
+}
+
+void ClipNode::_setUniform()
+{
+    if(_clipPlanesUniform) return;
+
+    _clipPlanesUniform = new osg::Uniform(osg::Uniform::FLOAT_VEC4, "osg_ClipPlanes", MAX_CLIP_PLANES);
+    _maxClipPlanesUniform = new osg::Uniform(osg::Uniform::INT, "osg_MaxClipPlanes");
+    _maxClipPlanesUniform->set( MAX_CLIP_PLANES );
+    _clipPlanesUniform->setUpdateCallback( new updateClipPlanes( this ) );
+    _stateset->addUniform( _clipPlanesUniform );
+    _stateset->addUniform( _maxClipPlanesUniform );
+    OSG_NOTICE<<"======================="<<_clipPlanesUniform->getNumElements()<<std::endl;
+}
+#endif

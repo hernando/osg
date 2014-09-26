@@ -11,6 +11,9 @@
  * OpenSceneGraph Public License for more details.
 */
 #include <osg/ClipNode>
+#include <osg/NodeCallback>
+#include <osgUtil/CullVisitor>
+#include <osg/GL>
 
 #include <algorithm>
 
@@ -21,6 +24,9 @@ ClipNode::ClipNode():
     _referenceFrame(RELATIVE_RF)
 {
     setStateSet(new StateSet);
+#if !(defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE))
+    _setUniforms();
+#endif
 }
 
 ClipNode::ClipNode(const ClipNode& cn, const CopyOp& copyop):
@@ -29,6 +35,9 @@ ClipNode::ClipNode(const ClipNode& cn, const CopyOp& copyop):
     _referenceFrame(cn._referenceFrame)
 {
     setStateSet(new StateSet);
+#if !(defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE))
+    _setUniforms();
+#endif
     for(ClipPlaneList::const_iterator itr=cn._planes.begin();
         itr!=cn._planes.end();
         ++itr)
@@ -44,7 +53,6 @@ ClipNode::ClipNode(const ClipNode& cn, const CopyOp& copyop):
 ClipNode::~ClipNode()
 {
 }
-
 
 void ClipNode::setReferenceFrame(ReferenceFrame rf)
 {
@@ -154,3 +162,76 @@ BoundingSphere ClipNode::computeBound() const
 {
     return Group::computeBound();
 }
+
+#if !(defined(OSG_GL_FIXED_FUNCTION_AVAILABLE) && !defined(OSG_GLES1_AVAILABLE))
+#define MAX_CLIP_PLANES 8
+
+namespace
+{
+
+class ClipPlanesUpdate : public osg::NodeCallback
+{
+    public:
+        ClipPlanesUpdate(ClipNode* clipNode):
+            _clipNode(clipNode),
+            _numPlanes(new osg::Uniform(osg::Uniform::UNSIGNED_INT, "osg_NumClipPlanes")),
+            _clipPlanes(new osg::Uniform(osg::Uniform::FLOAT_VEC4, "osg_ClipPlanes", MAX_CLIP_PLANES))
+        {
+            // setting the data variance the DYNAMIC makes it safe to change
+            // the uniform values during the CULL traversal.
+            _numPlanes->setDataVariance(osg::Object::DYNAMIC);
+            _clipPlanes->setDataVariance(osg::Object::DYNAMIC);
+
+            StateSet* stateSet = clipNode->getOrCreateStateSet();
+            stateSet->addUniform(_numPlanes);
+            stateSet->addUniform(_clipPlanes);
+        }
+
+    public:
+        virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
+        {
+            osgUtil::CullVisitor* cv = static_cast<osgUtil::CullVisitor*>(nv);
+
+            const osg::Matrix modelViewTransInv = osg::Matrix::inverse(*cv->getModelViewMatrix());
+
+            unsigned int numPlanes = 0;
+            for (osg::ClipNode::ClipPlaneList::const_iterator itr = _clipNode->getClipPlaneList().begin();
+                 itr != _clipNode->getClipPlaneList().end();
+                ++itr)
+            {
+                const unsigned int planeNum = itr->get()->getClipPlaneNum();
+                if (planeNum > MAX_CLIP_PLANES)
+                {
+                    OSG_WARN <<"Warning ClipNode: clip plane index greater than maximum " << MAX_CLIP_PLANES << std::endl;
+                }
+                else
+                {
+                    const Vec4d v = modelViewTransInv * itr->get()->getClipPlane();
+                    _clipPlanes->setElement(planeNum, Vec4(v));
+                    numPlanes = std::max(planeNum + 1, numPlanes);
+                }
+                // Unset planes are going to get undefined values, but it
+                // doesn't matter. For these planes the shaders are going to
+                // do useless work writing to the gl_ClipDistance array, but
+                // these undefined writes won't affect the outcome because
+                // the array positions are disabled (though GL_CLIP_DISTANCEX).
+                // It's the user's reponsibility not to leave gaps in the
+                // array when performance matters.
+            }
+            _numPlanes->set(numPlanes);
+
+            traverse(node, nv);
+        }
+
+    protected:
+        const ClipNode* _clipNode;
+        ref_ptr<Uniform> _numPlanes;
+        ref_ptr<Uniform> _clipPlanes;
+};
+}
+
+void ClipNode::_setUniforms()
+{
+    setCullCallback(new ClipPlanesUpdate(this));
+}
+#endif

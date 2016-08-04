@@ -28,6 +28,9 @@
     #include <X11/X.h>
     #include <X11/Xlib.h>
     #include <X11/Xutil.h>
+    #ifdef OSG_GL3_AVAILABLE
+        typedef ptrdiff_t GLintptrARB;
+    #endif
     #include <GL/glx.h>
     #ifndef GLX_VERSION_1_3
         typedef XID GLXPbuffer;

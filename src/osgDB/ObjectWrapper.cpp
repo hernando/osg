@@ -59,6 +59,10 @@
     #define GL_FRAGMENT_SHADER_DERIVATIVE_HINT  0x8B8B
 #endif
 
+#ifndef GL_VERTEX_PROGRAM_TWO_SIDE
+    #define GL_VERTEX_PROGRAM_TWO_SIDE 0x8643
+#endif
+
 using namespace osgDB;
 
 void osgDB::split( const std::string& src, StringList& list, char separator )
